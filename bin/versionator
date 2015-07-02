@@ -1,0 +1,116 @@
+#!/usr/bin/env php
+<?php
+
+$satis = json_decode( file_get_contents( 'http://apt/composer/packages.json' ) );
+
+$packages = [];
+foreach ( $satis->packages as $package => $packageVersions ) {
+	if ( strpos( $package, 'mendeley/' ) === false ) {
+		continue;
+	}
+	
+	$versions = [];
+
+	foreach ( $packageVersions as $version => $spec ) {
+		if ( strpos( $version, 'dev-' ) !== false || strpos( $version, 'v' ) !== 0 ) {
+			continue;
+		}
+
+		$versions[ $version ] = $spec;
+	}
+	
+	uasort( $versions, function( $a, $b ) {
+		return version_compare( $a->version, $b->version );
+	} );
+
+	$packages[ $package ] = $versions;
+}
+
+$latestVersions = [];
+foreach ( $packages as $package => $versions ) {
+	$latestVersion = null;
+	$counter = count( $versions );
+	foreach ( $versions as $version => $spec ) {
+		--$counter;
+		if ( !$counter ) {
+			$latestVersions[ $package ] = $version;
+		}
+	}
+}
+
+/*
+foreach ( $packages as $package => $versions ) {
+	$latestVersion = isset( $latestVersions[ $package ] ) ? $latestVersions[ $package ] : 'NO VERSIONS!';
+	echo "Package: {$package} ({$latestVersion})\n";
+	echo '  ', implode( ', ', array_keys( $versions ) ), "\n\n";
+}
+
+echo "\n\n";
+ */
+
+$webletDirs = glob( 'weblet-*/' );
+
+foreach ( $webletDirs as $webletDir ) {
+	$composerJsonPath = realpath( "{$webletDir}/composer.json" );
+	$composerLockPath = realpath( "{$webletDir}/composer.lock" );
+	
+	if ( !$composerJsonPath || !$composerLockPath ) {
+		continue;
+	}
+
+	$composerJsonData = json_decode( file_get_contents( $composerJsonPath ) );
+	$composerLockData = json_decode( file_get_contents( $composerLockPath ) );
+
+	$lockPackages = isset( $composerLockData->packages ) ? $composerLockData->packages : [];
+	$usingPackages = [];
+	foreach ( $lockPackages as $packageSpec ) {
+		if ( strpos( $packageSpec->name, 'mendeley/' ) === false ) {
+			continue;
+		}
+		$usingPackages[ $packageSpec->name ] = [
+			'version' => $packageSpec->version,
+			'commit' => $packageSpec->source->reference
+		];
+	}
+
+	$webletDirBase = basename( $webletDir );
+
+	echo bold( $composerJsonData->name ), " ({$webletDirBase})\n";
+
+	foreach ( $usingPackages as $package => $using ) {
+		$usingVersion = red( $using['version'] );
+		
+		if ( strpos( $using['version'], 'dev-' ) === 0 ) {
+			$usingVersion = red( $using['version'] );
+		}
+		else if ( $using['version'] == $latestVersions[ $package ] ) {
+			$usingVersion = green( $using['version'] );
+		}
+		else {
+			$usingVersion = yellow( $using['version'] );
+		}
+
+		echo "  {$package} ";
+		echo $usingVersion;
+	   	echo " ({$using['commit']})\n";
+	}
+	echo "\n";
+}
+
+function bold( $str ) {
+	return colour( 1, $str );
+}
+
+function red( $str ) {
+	return colour( 31, $str );
+}
+function yellow( $str ) {
+	return colour( 33, $str );
+}
+function green( $str ) {
+	return colour( 32, $str );
+}
+
+function colour( $code, $str ) {
+	return "\033[{$code}m{$str}\033[0m";
+}
