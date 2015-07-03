@@ -50,6 +50,8 @@ echo "\n\n";
 
 $webletDirs = glob( "{$_SERVER['PWD']}/weblet-*/" );
 
+echo bold( 'Colours:' ), ' ', red( 'Not a version!' ), ' ', yellow( 'Update available' ), ' ', green( 'Up to date' ), "\n\n";
+
 foreach ( $webletDirs as $webletDir ) {
 	$composerJsonPath = realpath( "{$webletDir}/composer.json" );
 	$composerLockPath = realpath( "{$webletDir}/composer.lock" );
